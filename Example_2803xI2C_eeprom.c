@@ -18,7 +18,7 @@
 // $TI Release: F2803x C/C++ Header Files and Peripheral Examples V127 $
 // $Release Date: March 30, 2013 $
 //###########################################################################
-//
+//new??
 /*
   this project is for gy80 module and using load flash
 	update 2016/7/6
@@ -38,9 +38,18 @@ __interrupt void i2c_int1a_isr(void);
 
 #define I2C_SLAVE_ADDR        0x53 //i2c device address
 #define I2C_NUMBYTES          2    //the byte of read datasheet
-#define I2C_EEPROM_HIGH_ADDR  0x32
-#define I2C_EEPROM_LOW_ADDR   0x33
-
+#define X_HIGH_ADDR 0x32
+#define X_LOW_ADDR 0x33
+#define Y_HIGH_ADDR 0x34
+#define Y_LOW_ADDR 0x35
+#define Z_HIGH_ADDR 0x36
+#define Z_LOW_ADDR 0x37
+Uint16 I2C_read_channel=0x00;
+#define X 0X00
+#define Y 0X01
+#define Z 0X02
+//Uint16 I2C_HIGH_ADDR;
+//Uint16 I2C_LOW_ADDR;
 // Global variables
 //this is copy the arduino example, for enable the measurement or something
 struct I2CMSG I2cMsgOut1 = { I2C_MSGSTAT_SEND_WITHSTOP,
@@ -53,14 +62,16 @@ struct I2CMSG I2cMsgOut1 = { I2C_MSGSTAT_SEND_WITHSTOP,
 struct I2CMSG I2cMsgIn1 = { I2C_MSGSTAT_SEND_NOSTOP,
 							I2C_SLAVE_ADDR,
 							I2C_NUMBYTES,
-							I2C_EEPROM_HIGH_ADDR,
-							I2C_EEPROM_LOW_ADDR };
+							X_HIGH_ADDR,
+							X_LOW_ADDR};
 
 struct I2CMSG *CurrentMsgPtr;				// Used in interrupts
 
-double xg;//the x axis gravity data
+double xg,yg,zg;//the x axis gravity data
 Uint16 virtualtimer = 0;
 Uint16 readcounter = 0x00;//for lower the repetition rate for read
+Uint16 device_intial_done_flag=0xFF;
+Uint16 I2CA_Read_fail=0x00;//for check whether device is connected of not
 
 void main(void) {
 	Uint16 Error;
@@ -145,9 +156,14 @@ void main(void) {
 	// Application loop
 	for (;;) {
 		//////////////////////////////////
-		// Write data to adxl345 section //
+		// Write data to adxl section  //
+		// this will only proceed once,//
+		//after initialized the device,//
+		// the code will only continue //
+		//read.                        //
 		//////////////////////////////////
-
+    if(device_intial_done_flag!=0x00)
+		{
 		// Check the outgoing message to see if it should be sent.
 		// In this example it is initialized to send with a stop bit.
 		if (I2cMsgOut1.MsgStatus == I2C_MSGSTAT_SEND_WITHSTOP) {
@@ -162,14 +178,18 @@ void main(void) {
 				I2cMsgOut1.MsgStatus = I2C_MSGSTAT_WRITE_BUSY;
 			}
 		}  // end of write section
+		device_intial_done_flag=0x00;//this mean the device have already intialized
+	}//device_intial_done
 
-		///////////////////////////////////
-		// Read data from EEPROM section //
-		///////////////////////////////////
+	///////////////////////////////////
+	// Read data from adxl345 section //
+	///////////////////////////////////
+	else{
+
 
 		// Check outgoing message status. Bypass read section if status is
 		// not inactive.
-		if (I2cMsgOut1.MsgStatus == I2C_MSGSTAT_INACTIVE) {
+	  //	if (I2cMsgOut1.MsgStatus == I2C_MSGSTAT_INACTIVE) {
 			// Check incoming message status.
 			if (I2cMsgIn1.MsgStatus == I2C_MSGSTAT_SEND_NOSTOP) {
 				// EEPROM address setup portion
@@ -180,6 +200,7 @@ void main(void) {
 					// complete at this point, the EEPROM could still be busy
 					// programming the data. Therefore, multiple attempts are
 					// necessary.
+					I2CA_Read_fail=0x0F;
 				}
 				// Update current message pointer and message status
 				CurrentMsgPtr = &I2cMsgIn1;
@@ -195,6 +216,7 @@ void main(void) {
 				while (I2CA_ReadData(&I2cMsgIn1) != I2C_SUCCESS) {
 					// Maybe setup an attempt counter to break an infinite while
 					// loop.
+					I2CA_Read_fail=0xFF;
 				}
 				// Update current message pointer and message status
 				CurrentMsgPtr = &I2cMsgIn1;
@@ -203,10 +225,28 @@ void main(void) {
 		}  // end of read section
 		virtualtimer++;
 		if (virtualtimer > 0xFFFE) {
-			if (I2cMsgIn1.MsgStatus == I2C_SUCCESS)
-				I2cMsgIn1.MsgStatus = I2C_MSGSTAT_SEND_NOSTOP;
+			if (I2cMsgIn1.MsgStatus == I2C_SUCCESS){
+						if(I2C_read_channel==X){
+							I2cMsgIn1.MemoryHighAddr=X_HIGH_ADDR;
+							I2cMsgIn1.MemoryLowAddr=X_LOW_ADDR;
+							zg =I2cMsgIn1.MsgBuffer[0] + (I2cMsgIn1.MsgBuffer[1] << 8);
+							I2C_read_channel++;
+							}
+							else if(I2C_read_channel==Y){
+								I2cMsgIn1.MemoryHighAddr=Y_HIGH_ADDR;
+								I2cMsgIn1.MemoryLowAddr=Y_LOW_ADDR;
+								xg =I2cMsgIn1.MsgBuffer[0] + (I2cMsgIn1.MsgBuffer[1] << 8);
+								I2C_read_channel++;
+							}
+							else{
+								I2cMsgIn1.MemoryHighAddr=Z_HIGH_ADDR;
+								I2cMsgIn1.MemoryLowAddr=Z_LOW_ADDR;
+								g =I2cMsgIn1.MsgBuffer[0] + (I2cMsgIn1.MsgBuffer[1] << 8);
+								I2C_read_channel=0X00;
+							}
+			I2cMsgIn1.MsgStatus = I2C_MSGSTAT_SEND_NOSTOP;
+			}
 		}
-
 	}   // end of for(;;)
 }   // end of main
 
@@ -325,7 +365,7 @@ __interrupt void i2c_int1a_isr(void)     // I2C-A
 					CurrentMsgPtr->MsgBuffer[i] = I2caRegs.I2CDRR;
 				}
 				//transfer the buffer's date into gravity force
-					xg =I2cMsgIn1.MsgBuffer[0] + (I2cMsgIn1.MsgBuffer[1] << 8);
+
 			}
 		}
 	}  // end of stop condition detected
@@ -353,18 +393,6 @@ __interrupt void i2c_int1a_isr(void)     // I2C-A
 	// Enable future I2C (PIE Group 8) interrupts
 	PieCtrlRegs.PIEACK.all = PIEACK_GROUP8;
 }
-
-// void pass() {
-// 	__asm("   ESTOP0");
-// 	for (;;)
-// 		;
-// }
-//
-// void fail() {
-// 	__asm("   ESTOP0");
-// 	for (;;)
-// 		;
-// }
 void MemCopy(Uint16 *SourceAddr, Uint16* SourceEndAddr, Uint16* DestAddr)
 {
     while(SourceAddr < SourceEndAddr)
