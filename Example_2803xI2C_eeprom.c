@@ -18,7 +18,7 @@
 // $TI Release: F2803x C/C++ Header Files and Peripheral Examples V127 $
 // $Release Date: March 30, 2013 $
 //###########################################################################
-//new??
+
 /*
   this project is for gy80 module and using load flash
 	update 2016/7/6
