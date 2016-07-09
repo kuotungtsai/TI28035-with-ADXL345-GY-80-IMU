@@ -44,6 +44,8 @@ __interrupt void i2c_int1a_isr(void);
 #define Y_LOW_ADDR 0x35
 #define Z_HIGH_ADDR 0x36
 #define Z_LOW_ADDR 0x37
+
+/*declare the channel for select*/
 Uint16 I2C_read_channel=0x00;
 #define X 0X00
 #define Y 0X01
